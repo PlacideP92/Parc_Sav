@@ -35,6 +35,10 @@
       <button class="nav-item active" data-screen="accueil" onclick="go('accueil',this)">Accueil</button>
       <button class="nav-item" data-screen="materiel" onclick="go('materiel',this)">Matériel</button>
       <button class="nav-item" data-screen="scan" onclick="go('scan',this)">Scanner QR</button>
+      <button class="nav-item" data-screen="maintenance" onclick="go('maintenance',this)">Maintenance</button>
+      <button class="nav-item" data-screen="inventaire" onclick="go('inventaire',this)">Inventaire</button>
+      <button class="nav-item" data-screen="rapports" onclick="go('rapports',this)">Rapports</button>
+      <button class="nav-item" data-screen="admin" onclick="go('admin',this)">Administration</button>
     </div>
     <div class="sidebar-foot">
       <div class="avatar" id="avatarInitials">--</div>
@@ -156,6 +160,82 @@
             <div class="label-ref" id="lblRef">—</div>
             <div class="label-modele" id="lblModele">—</div>
             <div class="label-serie" id="lblSerie">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAINTENANCE -->
+    <div class="screen" id="screen-maintenance">
+      <div class="topbar">
+        <div><h1>Maintenance</h1><div class="sub" id="maintCount">—</div></div>
+        <button class="btn" onclick="openNewTicket()">+ Déclarer une panne</button>
+      </div>
+      <div id="ticketsList">Chargement…</div>
+    </div>
+
+    <!-- NOUVEAU TICKET -->
+    <div class="screen" id="screen-nouveau-ticket">
+      <button class="back-link" onclick="go('maintenance')">← Retour à la maintenance</button>
+      <div class="topbar"><div><h1>Déclarer une panne</h1></div></div>
+      <div class="card" style="max-width:520px;">
+        <div class="field"><label>Équipement concerné</label>
+          <select id="t_equip"></select>
+        </div>
+        <div class="field"><label>Description du problème</label>
+          <input type="text" id="t_probleme" placeholder="Ex : ne démarre plus, bourrage papier…">
+        </div>
+        <button class="btn" onclick="createTicket()">Créer le ticket</button>
+        <span id="ticketMsg" style="margin-left:10px;font-size:13px;"></span>
+      </div>
+    </div>
+
+    <!-- INVENTAIRE -->
+    <div class="screen" id="screen-inventaire">
+      <div class="topbar">
+        <div><h1>Inventaire</h1><div class="sub" id="campagneSub">—</div></div>
+        <button class="btn" id="btnNewCampagne" onclick="createCampagne()">+ Démarrer une campagne</button>
+      </div>
+      <div id="campagneZone"></div>
+    </div>
+
+    <!-- RAPPORTS -->
+    <div class="screen" id="screen-rapports">
+      <div class="topbar">
+        <div><h1>Rapports</h1><div class="sub">Vue statistique du parc</div></div>
+        <button class="btn ghost" onclick="exportCSV()">Exporter en CSV</button>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <h3>Répartition par type</h3>
+        <div id="typeChart"></div>
+      </div>
+      <div class="card">
+        <h3>Garanties arrivant à expiration (moins de 60 jours)</h3>
+        <div id="warrantyList"></div>
+      </div>
+    </div>
+
+    <!-- ADMINISTRATION -->
+    <div class="screen" id="screen-admin">
+      <div class="topbar"><div><h1>Administration</h1><div class="sub">Lieux, utilisateurs et comptes</div></div></div>
+      <p style="font-size:13px;color:var(--ink-soft);margin-bottom:18px;">
+        Les comptes de connexion (email / mot de passe) se gèrent directement depuis Supabase &gt; Authentication &gt; Users.
+      </p>
+      <div class="two-col-admin">
+        <div class="card">
+          <h3>Lieux</h3>
+          <div id="lieuxList" style="margin-bottom:14px;"></div>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="newLieuNom" placeholder="Nom du lieu" style="flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;">
+            <button class="btn" onclick="addLieu()">Ajouter</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Personnes</h3>
+          <div id="personnesList" style="margin-bottom:14px;"></div>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="newPersonneNom" placeholder="Nom de la personne" style="flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;">
+            <button class="btn" onclick="addPersonne()">Ajouter</button>
           </div>
         </div>
       </div>
