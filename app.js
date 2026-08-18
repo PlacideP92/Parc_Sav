@@ -1,11 +1,14 @@
 // ============================================================
-// ParcIT — logique de l'application
+// ParcIT — logique de l'application.01
 // ============================================================
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let equipements = [];
 let lieux = [];
 let personnes = [];
+let maintenances = [];
+let campagnes = [];
+let scansCampagneActive = [];
 let currentEquip = null;
 let html5QrCode = null;
 
@@ -60,17 +63,25 @@ function go(name, el){
 
 // ---------- Chargement des données ----------
 async function loadAll(){
-  const [eqRes, lieuxRes, persRes] = await Promise.all([
+  const [eqRes, lieuxRes, persRes, maintRes, campRes] = await Promise.all([
     sb.from('equipements').select('*, lieux(nom), personnes(nom)').order('created_at', { ascending:false }),
     sb.from('lieux').select('*'),
-    sb.from('personnes').select('*')
+    sb.from('personnes').select('*'),
+    sb.from('maintenances').select('*, equipements(reference, marque, modele)').order('date_declaration', { ascending:false }),
+    sb.from('inventaire_campagnes').select('*').order('date_debut', { ascending:false })
   ]);
   equipements = eqRes.data || [];
   lieux = lieuxRes.data || [];
   personnes = persRes.data || [];
+  maintenances = maintRes.data || [];
+  campagnes = campRes.data || [];
   renderDashboard();
   renderEquipList();
   populateSelects();
+  renderMaintenance();
+  renderAdmin();
+  renderRapports();
+  renderInventaire();
 }
 
 function pillClass(statut){
@@ -218,6 +229,7 @@ function startScanner(){
       const found = equipements.find(e => e.reference === decodedText.trim());
       const box = document.getElementById('scanResult');
       if(found){
+        registerScanInventaire(found.id);
         box.innerHTML = `<div class="card"><b>${found.marque||''} ${found.modele||''}</b> <span class="mono">${found.reference}</span>
           <br><button class="btn" style="margin-top:10px;" onclick="stopScanner();openDetail('${found.id}')">Ouvrir la fiche</button></div>`;
       } else {
@@ -231,4 +243,166 @@ function startScanner(){
 }
 function stopScanner(){
   if(html5QrCode){ html5QrCode.stop().catch(()=>{}); html5QrCode = null; }
+}
+
+// ============================================================
+// MAINTENANCE
+// ============================================================
+function ticketClass(statut){
+  return { 'Ouvert':'open', 'En cours':'progress', 'Resolu':'done' }[statut] || 'open';
+}
+
+function renderMaintenance(){
+  document.getElementById('maintCount').textContent = maintenances.length + ' tickets';
+  document.getElementById('ticketsList').innerHTML = maintenances.length ? maintenances.map(t => `
+    <div class="ticket ${ticketClass(t.statut)}">
+      <div class="flag"></div>
+      <div class="body">
+        <div class="title">${t.equipements?.reference || '—'} — ${t.probleme}</div>
+        <div class="foot">Déclaré le ${new Date(t.date_declaration).toLocaleDateString('fr-FR')}${t.intervenant ? ' — ' + t.intervenant : ''}</div>
+        <select onchange="updateTicket('${t.id}', this.value)">
+          <option ${t.statut==='Ouvert'?'selected':''}>Ouvert</option>
+          <option ${t.statut==='En cours'?'selected':''}>En cours</option>
+          <option ${t.statut==='Resolu'?'selected':''}>Resolu</option>
+        </select>
+      </div>
+    </div>`).join('') : '<p style="color:var(--ink-faint);">Aucun ticket de maintenance.</p>';
+}
+
+function openNewTicket(){
+  document.getElementById('t_equip').innerHTML = equipements.map(e => `<option value="${e.id}">${e.reference} — ${e.marque||''} ${e.modele||''}</option>`).join('');
+  go('nouveau-ticket');
+}
+
+async function createTicket(){
+  const equipId = document.getElementById('t_equip').value;
+  const probleme = document.getElementById('t_probleme').value.trim();
+  const msg = document.getElementById('ticketMsg');
+  if(!probleme){ msg.style.color='var(--status-panne)'; msg.textContent='Décris le problème.'; return; }
+  await sb.from('maintenances').insert({ equipement_id: equipId, probleme, statut:'Ouvert' });
+  await sb.from('equipements').update({ statut:'En panne' }).eq('id', equipId);
+  msg.style.color='var(--status-service)'; msg.textContent='Ticket créé.';
+  await loadAll();
+  go('maintenance');
+}
+
+async function updateTicket(id, statut){
+  const payload = { statut };
+  if(statut === 'Resolu') payload.date_resolution = new Date().toISOString();
+  await sb.from('maintenances').update(payload).eq('id', id);
+  if(statut === 'Resolu'){
+    const ticket = maintenances.find(t => t.id === id);
+    if(ticket) await sb.from('equipements').update({ statut:'En service' }).eq('id', ticket.equipement_id);
+  }
+  await loadAll();
+}
+
+// ============================================================
+// INVENTAIRE
+// ============================================================
+function renderInventaire(){
+  const active = campagnes.find(c => c.statut === 'En cours');
+  document.getElementById('campagneSub').textContent = active ? 'Campagne active : ' + active.nom : 'Aucune campagne en cours';
+  document.getElementById('btnNewCampagne').style.display = active ? 'none' : 'inline-flex';
+
+  if(!active){
+    document.getElementById('campagneZone').innerHTML = '<p style="color:var(--ink-faint);">Démarre une nouvelle campagne pour commencer le recensement.</p>';
+    return;
+  }
+  loadScansCampagne(active.id);
+}
+
+async function createCampagne(){
+  const nom = prompt("Nom de la campagne (ex: Inventaire Août 2026)", "Inventaire " + new Date().toLocaleDateString('fr-FR'));
+  if(!nom) return;
+  await sb.from('inventaire_campagnes').insert({ nom, statut:'En cours' });
+  await loadAll();
+}
+
+async function loadScansCampagne(campagneId){
+  const { data } = await sb.from('inventaire_scans').select('*, equipements(reference, marque, modele)').eq('campagne_id', campagneId);
+  scansCampagneActive = data || [];
+  const scannedIds = scansCampagneActive.map(s => s.equipement_id);
+  const manquants = equipements.filter(e => !scannedIds.includes(e.id) && e.statut !== 'Au rebut');
+  const pct = equipements.length ? Math.round((scannedIds.length / equipements.length) * 100) : 0;
+
+  document.getElementById('campagneZone').innerHTML = `
+    <div class="card" style="margin-bottom:16px;">
+      <h3>Progression</h3>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--ink-soft);">
+        <span>${scannedIds.length} / ${equipements.length} équipements scannés</span><span>${pct}%</span>
+      </div>
+      <div class="inv-progress"><div class="fill" style="width:${pct}%;"></div></div>
+      <button class="btn" style="margin-top:10px;" onclick="go('scan')">Scanner un équipement</button>
+    </div>
+    <div class="card">
+      <h3>Non encore trouvés (${manquants.length})</h3>
+      ${manquants.length ? manquants.map(e => `<div class="inv-row"><span>${e.reference} — ${e.marque||''} ${e.modele||''}</span><span class="pill panne">Manquant</span></div>`).join('') : '<p style="color:var(--ink-faint);">Tout a été scanné 🎉</p>'}
+    </div>`;
+}
+
+// Appelé automatiquement quand un scan réussit (voir startScanner) s'il y a une campagne active
+async function registerScanInventaire(equipementId){
+  const active = campagnes.find(c => c.statut === 'En cours');
+  if(!active) return;
+  const already = scansCampagneActive.find(s => s.equipement_id === equipementId);
+  if(already) return;
+  await sb.from('inventaire_scans').insert({ campagne_id: active.id, equipement_id: equipementId, trouve: true });
+}
+
+// ============================================================
+// RAPPORTS
+// ============================================================
+function renderRapports(){
+  const types = {};
+  equipements.forEach(e => { types[e.type] = (types[e.type]||0) + 1; });
+  const max = Math.max(1, ...Object.values(types));
+  document.getElementById('typeChart').innerHTML = Object.entries(types).map(([type,n]) => `
+    <div class="bar-row">
+      <div class="lbl">${type}</div>
+      <div class="track"><div class="fill" style="width:${(n/max*100)}%;"></div></div>
+      <div class="val">${n}</div>
+    </div>`).join('') || '<p style="color:var(--ink-faint);">Aucune donnée.</p>';
+
+  const dans60j = new Date(); dans60j.setDate(dans60j.getDate() + 60);
+  const expirant = equipements.filter(e => e.garantie_fin && new Date(e.garantie_fin) <= dans60j && new Date(e.garantie_fin) >= new Date());
+  document.getElementById('warrantyList').innerHTML = expirant.length ? expirant.map(e => {
+    const jours = Math.round((new Date(e.garantie_fin) - new Date()) / 86400000);
+    return `<div class="warn-row"><span>${e.reference} — ${e.marque||''} ${e.modele||''}</span><span class="pill reparation">${jours} j</span></div>`;
+  }).join('') : '<p style="color:var(--ink-faint);">Aucune garantie proche de l\'expiration.</p>';
+}
+
+function exportCSV(){
+  const headers = ['Reference','Type','Marque','Modele','Statut','Utilisateur','Lieu','Garantie'];
+  const rows = equipements.map(e => [e.reference, e.type, e.marque, e.modele, e.statut, e.personnes?.nom||'', e.lieux?.nom||'', e.garantie_fin||'']);
+  const csv = [headers.join(';'), ...rows.map(r => r.map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(';'))].join('\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'parc-informatique.csv';
+  a.click();
+}
+
+// ============================================================
+// ADMINISTRATION
+// ============================================================
+function renderAdmin(){
+  document.getElementById('lieuxList').innerHTML = lieux.length ? lieux.map(l => `<div class="admin-row"><span>${l.nom}</span><span style="color:var(--ink-faint);">${l.type||''}</span></div>`).join('') : '<p style="color:var(--ink-faint);">Aucun lieu.</p>';
+  document.getElementById('personnesList').innerHTML = personnes.length ? personnes.map(p => `<div class="admin-row"><span>${p.nom}</span><span style="color:var(--ink-faint);">${p.fonction||''}</span></div>`).join('') : '<p style="color:var(--ink-faint);">Aucune personne.</p>';
+}
+
+async function addLieu(){
+  const nom = document.getElementById('newLieuNom').value.trim();
+  if(!nom) return;
+  await sb.from('lieux').insert({ nom });
+  document.getElementById('newLieuNom').value = '';
+  await loadAll();
+}
+
+async function addPersonne(){
+  const nom = document.getElementById('newPersonneNom').value.trim();
+  if(!nom) return;
+  await sb.from('personnes').insert({ nom });
+  document.getElementById('newPersonneNom').value = '';
+  await loadAll();
 }
