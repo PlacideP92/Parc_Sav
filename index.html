@@ -70,6 +70,7 @@
         <button class="btn" onclick="openNewEquip()">+ Nouvel équipement</button>
       </div>
       <div class="filters">
+        <select id="filterType" onchange="renderEquipList()" style="padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:13px;margin-right:10px;"></select>
         <input type="text" id="searchBox" placeholder="Rechercher une référence, un modèle…" oninput="renderEquipList()">
       </div>
       <table>
@@ -85,7 +86,7 @@
       <div class="card" style="max-width:640px;">
         <div class="info-list" style="grid-template-columns:1fr 1fr;">
           <div class="field"><label>Type</label>
-            <select id="f_type"><option>PC</option><option>Écran</option><option>Imprimante</option><option>Switch</option><option>Téléphone</option><option>Accessoire</option></select>
+            <select id="f_type" onchange="handleTypeChange(this)"></select>
           </div>
           <div class="field"><label>Référence</label><input type="text" id="f_reference" placeholder="PC-2026-00132"></div>
           <div class="field"><label>Marque</label><input type="text" id="f_marque"></div>
@@ -222,6 +223,14 @@
         Les comptes de connexion (email / mot de passe) se gèrent directement depuis Supabase &gt; Authentication &gt; Users.
       </p>
       <div class="two-col-admin">
+        <div class="card">
+          <h3>Types de matériel</h3>
+          <div id="typesList" style="margin-bottom:14px;"></div>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="newTypeNom" placeholder="Ex : Tablette" style="flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;">
+            <button class="btn" onclick="addType()">Ajouter</button>
+          </div>
+        </div>
         <div class="card">
           <h3>Lieux</h3>
           <div id="lieuxList" style="margin-bottom:14px;"></div>
