@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>ParcIT</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="screen-login" class="login-screen active">
+  <div class="login-box">
+    <div class="login-mark"></div>
+    <div class="login-title">ParcIT</div>
+    <div class="login-sub">Gestion du parc informatique</div>
+    <div class="field"><label>Email</label><input type="email" id="loginEmail" placeholder="toi@exemple.com"></div>
+    <div class="field"><label>Mot de passe</label><input type="password" id="loginPassword" placeholder="••••••••"></div>
+    <div id="loginError" class="error-msg" style="display:none;"></div>
+    <button class="btn" onclick="login()" style="width:100%;justify-content:center;">Se connecter</button>
+    <div class="login-hint">Compte créé depuis Supabase &gt; Authentication</div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app" style="display:none;">
+  <div class="sidebar">
+    <div class="logo"><span class="mark"></span> ParcIT</div>
+    <div class="nav-group">
+      <button class="nav-item active" data-screen="accueil" onclick="go('accueil',this)">Accueil</button>
+      <button class="nav-item" data-screen="materiel" onclick="go('materiel',this)">Matériel</button>
+      <button class="nav-item" data-screen="scan" onclick="go('scan',this)">Scanner QR</button>
+    </div>
+    <div class="sidebar-foot">
+      <div class="avatar" id="avatarInitials">--</div>
+      <div class="who"><b id="whoName">—</b><span>Équipe technique</span></div>
+    </div>
+    <button class="btn ghost" style="margin:10px 6px 0;" onclick="logout()">Se déconnecter</button>
+  </div>
+
+  <div class="main">
+    <!-- ACCUEIL -->
+    <div class="screen active" id="screen-accueil">
+      <div class="topbar"><div><h1>Accueil</h1><div class="sub">Vue d'ensemble du parc</div></div></div>
+      <div class="stat-row">
+        <div class="stat-card"><div class="n" id="statTotal">–</div><div class="l">Équipements au total</div></div>
+        <div class="stat-card"><div class="n" id="statService">–</div><div class="l">En service</div></div>
+        <div class="stat-card"><div class="n" id="statPanne">–</div><div class="l">En panne</div></div>
+        <div class="stat-card"><div class="n" id="statStock">–</div><div class="l">En stock</div></div>
+      </div>
+      <div class="card">
+        <h3>Derniers équipements enregistrés</h3>
+        <div id="recentList">Chargement…</div>
+      </div>
+    </div>
+
+    <!-- MATERIEL -->
+    <div class="screen" id="screen-materiel">
+      <div class="topbar">
+        <div><h1>Matériel</h1><div class="sub" id="materielCount">—</div></div>
+        <button class="btn" onclick="openNewEquip()">+ Nouvel équipement</button>
+      </div>
+      <div class="filters">
+        <input type="text" id="searchBox" placeholder="Rechercher une référence, un modèle…" oninput="renderEquipList()">
+      </div>
+      <table>
+        <thead><tr><th>Équipement</th><th>Référence</th><th>Statut</th><th>Utilisateur</th><th>Lieu</th></tr></thead>
+        <tbody id="equipTableBody"><tr><td colspan="5">Chargement…</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- NOUVEL EQUIPEMENT (form) -->
+    <div class="screen" id="screen-nouveau">
+      <button class="back-link" onclick="go('materiel')">← Retour au matériel</button>
+      <div class="topbar"><div><h1>Nouvel équipement</h1></div></div>
+      <div class="card" style="max-width:640px;">
+        <div class="info-list" style="grid-template-columns:1fr 1fr;">
+          <div class="field"><label>Type</label>
+            <select id="f_type"><option>PC</option><option>Écran</option><option>Imprimante</option><option>Switch</option><option>Téléphone</option><option>Accessoire</option></select>
+          </div>
+          <div class="field"><label>Référence</label><input type="text" id="f_reference" placeholder="PC-2026-00132"></div>
+          <div class="field"><label>Marque</label><input type="text" id="f_marque"></div>
+          <div class="field"><label>Modèle</label><input type="text" id="f_modele"></div>
+          <div class="field"><label>N° de série</label><input type="text" id="f_serie"></div>
+          <div class="field"><label>Date d'achat</label><input type="date" id="f_achat"></div>
+          <div class="field"><label>Garantie jusqu'au</label><input type="date" id="f_garantie"></div>
+          <div class="field"><label>Statut</label>
+            <select id="f_statut"><option>En stock</option><option>En service</option><option>En panne</option><option>En reparation</option><option>Au rebut</option></select>
+          </div>
+        </div>
+        <button class="btn" onclick="createEquip()">Enregistrer et générer le QR code</button>
+        <span id="createMsg" style="margin-left:10px;font-size:13px;"></span>
+      </div>
+    </div>
+
+    <!-- FICHE MATERIEL -->
+    <div class="screen" id="screen-fiche">
+      <button class="back-link" onclick="go('materiel')">← Retour au matériel</button>
+      <div class="detail-head">
+        <div class="idbox">
+          <canvas id="qrCanvas" width="72" height="72" style="border:1px solid var(--line);border-radius:8px;"></canvas>
+          <div>
+            <h2 id="ficheTitre">—</h2>
+            <span class="mono ref-mono" id="ficheRef">—</span>
+            <span class="pill" id="fichePill" style="margin-left:8px;"></span>
+          </div>
+        </div>
+        <div class="detail-actions">
+          <button class="btn ghost" onclick="go('etiquette')">Imprimer l'étiquette</button>
+          <button class="btn ghost" onclick="openAssign()">Affecter</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Informations</h3>
+        <div class="info-list" id="ficheInfo"></div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <h3>Changer le statut</h3>
+        <select id="ficheStatutSelect" onchange="updateStatut()">
+          <option>En stock</option><option>En service</option><option>En panne</option><option>En reparation</option><option>Au rebut</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- AFFECTATION -->
+    <div class="screen" id="screen-affectation">
+      <button class="back-link" onclick="go('fiche')">← Retour à la fiche</button>
+      <div class="topbar"><div><h1>Affecter l'équipement</h1><div class="sub" id="assignRef">—</div></div></div>
+      <div class="card" style="max-width:520px;">
+        <div class="field"><label>Utilisateur</label>
+          <select id="assignPersonne"><option value="">— Aucun (équipement partagé) —</option></select>
+        </div>
+        <div class="field"><label>Lieu</label>
+          <select id="assignLieu"></select>
+        </div>
+        <button class="btn" onclick="confirmAssign()">Confirmer l'affectation</button>
+        <span id="assignMsg" style="margin-left:10px;font-size:13px;"></span>
+      </div>
+    </div>
+
+    <!-- ETIQUETTE (impression) -->
+    <div class="screen" id="screen-etiquette">
+      <button class="back-link no-print" onclick="go('fiche')">← Retour à la fiche</button>
+      <div class="topbar no-print"><div><h1>Étiquette</h1><div class="sub">Format 60 × 40 mm — prête à imprimer</div></div></div>
+      <button class="btn no-print" onclick="window.print()">Imprimer</button>
+      <div class="label-sheet">
+        <div class="label-60x40">
+          <div class="label-name" id="lblType">ParcIT</div>
+          <canvas id="qrCanvasPrint" width="90" height="90"></canvas>
+          <div class="label-text">
+            <div class="label-ref" id="lblRef">—</div>
+            <div class="label-modele" id="lblModele">—</div>
+            <div class="label-serie" id="lblSerie">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCAN -->
+    <div class="screen" id="screen-scan">
+      <div class="topbar"><div><h1>Scanner un QR code</h1><div class="sub">Autorise la caméra pour scanner une étiquette</div></div></div>
+      <div id="qrReader" style="max-width:360px;"></div>
+      <div id="scanResult" style="margin-top:20px;"></div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
