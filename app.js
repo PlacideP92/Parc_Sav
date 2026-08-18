@@ -1,5 +1,5 @@
 // ============================================================
-// ParcIT — logique de l'application.01
+// ParcIT — logique de l'application.02
 // ============================================================
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -9,6 +9,7 @@ let personnes = [];
 let maintenances = [];
 let campagnes = [];
 let scansCampagneActive = [];
+let typesMateriel = [];
 let currentEquip = null;
 let html5QrCode = null;
 
@@ -63,21 +64,24 @@ function go(name, el){
 
 // ---------- Chargement des données ----------
 async function loadAll(){
-  const [eqRes, lieuxRes, persRes, maintRes, campRes] = await Promise.all([
+  const [eqRes, lieuxRes, persRes, maintRes, campRes, typesRes] = await Promise.all([
     sb.from('equipements').select('*, lieux(nom), personnes(nom)').order('created_at', { ascending:false }),
     sb.from('lieux').select('*'),
     sb.from('personnes').select('*'),
     sb.from('maintenances').select('*, equipements(reference, marque, modele)').order('date_declaration', { ascending:false }),
-    sb.from('inventaire_campagnes').select('*').order('date_debut', { ascending:false })
+    sb.from('inventaire_campagnes').select('*').order('date_debut', { ascending:false }),
+    sb.from('types_materiel').select('*').order('nom')
   ]);
   equipements = eqRes.data || [];
   lieux = lieuxRes.data || [];
   personnes = persRes.data || [];
   maintenances = maintRes.data || [];
   campagnes = campRes.data || [];
+  typesMateriel = typesRes.data || [];
   renderDashboard();
   renderEquipList();
   populateSelects();
+  populateTypeSelects();
   renderMaintenance();
   renderAdmin();
   renderRapports();
@@ -105,10 +109,13 @@ function renderDashboard(){
 // ---------- Liste matériel ----------
 function renderEquipList(){
   const q = (document.getElementById('searchBox')?.value || '').toLowerCase();
+  const typeFilter = document.getElementById('filterType')?.value || '';
   document.getElementById('materielCount').textContent = equipements.length + ' équipements enregistrés';
-  const filtered = equipements.filter(e =>
-    !q || (e.reference||'').toLowerCase().includes(q) || (e.modele||'').toLowerCase().includes(q) || (e.marque||'').toLowerCase().includes(q)
-  );
+  const filtered = equipements.filter(e => {
+    const matchQ = !q || (e.reference||'').toLowerCase().includes(q) || (e.modele||'').toLowerCase().includes(q) || (e.marque||'').toLowerCase().includes(q);
+    const matchType = !typeFilter || e.type === typeFilter;
+    return matchQ && matchType;
+  });
   document.getElementById('equipTableBody').innerHTML = filtered.length ? filtered.map(e => `
     <tr onclick="openDetail('${e.id}')">
       <td><b>${e.marque||''} ${e.modele||''}</b><br><span style="color:var(--ink-faint);font-size:12px;">${e.type}</span></td>
@@ -117,6 +124,45 @@ function renderEquipList(){
       <td>${e.personnes?.nom || '—'}</td>
       <td>${e.lieux?.nom || '—'}</td>
     </tr>`).join('') : '<tr><td colspan="5">Aucun résultat.</td></tr>';
+}
+
+function populateTypeSelects(){
+  const filterSel = document.getElementById('filterType');
+  if(filterSel){
+    const current = filterSel.value;
+    filterSel.innerHTML = '<option value="">Tous les types</option>' +
+      typesMateriel.map(t => `<option value="${t.nom}">${t.nom}</option>`).join('');
+    filterSel.value = current;
+  }
+  const formSel = document.getElementById('f_type');
+  if(formSel){
+    formSel.innerHTML = typesMateriel.map(t => `<option value="${t.nom}">${t.nom}</option>`).join('')
+      + '<option value="__new__">+ Créer un nouveau type…</option>';
+  }
+  const adminList = document.getElementById('typesList');
+  if(adminList){
+    adminList.innerHTML = typesMateriel.length ? typesMateriel.map(t => `<div class="admin-row"><span>${t.nom}</span></div>`).join('') : '<p style="color:var(--ink-faint);">Aucun type.</p>';
+  }
+}
+
+async function handleTypeChange(sel){
+  if(sel.value !== '__new__') return;
+  const nom = prompt("Nom du nouveau type de matériel (ex: Tablette, Vidéoprojecteur…)");
+  if(!nom || !nom.trim()){ sel.value = typesMateriel[0]?.nom || ''; return; }
+  const { data, error } = await sb.from('types_materiel').insert({ nom: nom.trim() }).select().single();
+  if(error){ alert("Impossible de créer ce type : " + error.message); sel.value = typesMateriel[0]?.nom || ''; return; }
+  typesMateriel.push(data);
+  typesMateriel.sort((a,b) => a.nom.localeCompare(b.nom));
+  populateTypeSelects();
+  sel.value = data.nom;
+}
+
+async function addType(){
+  const nom = document.getElementById('newTypeNom').value.trim();
+  if(!nom) return;
+  await sb.from('types_materiel').insert({ nom });
+  document.getElementById('newTypeNom').value = '';
+  await loadAll();
 }
 
 function populateSelects(){
