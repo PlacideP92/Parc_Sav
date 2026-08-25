@@ -79,10 +79,10 @@
       </table>
     </div>
 
-    <!-- NOUVEL EQUIPEMENT (form) -->
+    <!-- NOUVEL EQUIPEMENT / MODIFIER (form) -->
     <div class="screen" id="screen-nouveau">
-      <button class="back-link" onclick="go('materiel')">← Retour au matériel</button>
-      <div class="topbar"><div><h1>Nouvel équipement</h1></div></div>
+      <button class="back-link" onclick="go(formMode === 'edit' ? 'fiche' : 'materiel')">← Retour</button>
+      <div class="topbar"><div><h1 id="formTitle">Nouvel équipement</h1></div></div>
       <div class="card" style="max-width:640px;">
         <div class="info-list" style="grid-template-columns:1fr 1fr;">
           <div class="field"><label>Type</label>
@@ -97,8 +97,12 @@
           <div class="field"><label>Statut</label>
             <select id="f_statut"><option>En stock</option><option>En service</option><option>En panne</option><option>En reparation</option><option>Au rebut</option></select>
           </div>
+          <div class="field"><label>Adresse IP</label><input type="text" id="f_ip" placeholder="192.168.1.25"></div>
+          <div class="field"><label>Adresse MAC</label><input type="text" id="f_mac" placeholder="3C:9A:1B:44:0F:E2"></div>
+          <div class="field"><label>Système (OS)</label><input type="text" id="f_os" placeholder="Windows 11 IoT"></div>
         </div>
-        <button class="btn" onclick="createEquip()">Enregistrer et générer le QR code</button>
+        <div class="field"><label>Note</label><input type="text" id="f_note" placeholder="Commentaire libre"></div>
+        <button class="btn" id="formSubmitBtn" onclick="saveEquip()">Enregistrer et générer le QR code</button>
         <span id="createMsg" style="margin-left:10px;font-size:13px;"></span>
       </div>
     </div>
@@ -116,6 +120,7 @@
           </div>
         </div>
         <div class="detail-actions">
+          <button class="btn ghost" onclick="openEditEquip()">Modifier</button>
           <button class="btn ghost" onclick="go('etiquette')">Imprimer l'étiquette</button>
           <button class="btn ghost" onclick="openAssign()">Affecter</button>
         </div>
