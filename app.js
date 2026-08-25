@@ -1,5 +1,5 @@
 // ============================================================
-// ParcIT — logique de l'application.02
+// ParcIT — logique de l'application.03
 // ============================================================
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -173,10 +173,43 @@ function populateSelects(){
   lieuSel.innerHTML = lieux.map(l => `<option value="${l.id}">${l.nom}</option>`).join('');
 }
 
-// ---------- Nouvel équipement ----------
-function openNewEquip(){ go('nouveau'); }
+// ---------- Nouvel équipement / Modification ----------
+let formMode = 'create';
 
-async function createEquip(){
+function openNewEquip(){
+  formMode = 'create';
+  document.getElementById('formTitle').textContent = 'Nouvel équipement';
+  document.getElementById('formSubmitBtn').textContent = 'Enregistrer et générer le QR code';
+  ['f_reference','f_marque','f_modele','f_serie','f_achat','f_garantie','f_ip','f_mac','f_os','f_note'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f_statut').value = 'En stock';
+  document.getElementById('createMsg').textContent = '';
+  go('nouveau');
+  populateTypeSelects();
+}
+
+function openEditEquip(){
+  if(!currentEquip) return;
+  formMode = 'edit';
+  document.getElementById('formTitle').textContent = 'Modifier — ' + currentEquip.reference;
+  document.getElementById('formSubmitBtn').textContent = 'Enregistrer les modifications';
+  document.getElementById('f_reference').value = currentEquip.reference || '';
+  document.getElementById('f_marque').value = currentEquip.marque || '';
+  document.getElementById('f_modele').value = currentEquip.modele || '';
+  document.getElementById('f_serie').value = currentEquip.numero_serie || '';
+  document.getElementById('f_achat').value = currentEquip.date_achat || '';
+  document.getElementById('f_garantie').value = currentEquip.garantie_fin || '';
+  document.getElementById('f_ip').value = currentEquip.adresse_ip || '';
+  document.getElementById('f_mac').value = currentEquip.adresse_mac || '';
+  document.getElementById('f_os').value = currentEquip.os || '';
+  document.getElementById('f_note').value = currentEquip.note || '';
+  document.getElementById('f_statut').value = currentEquip.statut || 'En stock';
+  document.getElementById('createMsg').textContent = '';
+  go('nouveau');
+  populateTypeSelects();
+  document.getElementById('f_type').value = currentEquip.type;
+}
+
+async function saveEquip(){
   const payload = {
     type: document.getElementById('f_type').value,
     reference: document.getElementById('f_reference').value.trim(),
@@ -185,7 +218,11 @@ async function createEquip(){
     numero_serie: document.getElementById('f_serie').value.trim(),
     date_achat: document.getElementById('f_achat').value || null,
     garantie_fin: document.getElementById('f_garantie').value || null,
-    statut: document.getElementById('f_statut').value
+    statut: document.getElementById('f_statut').value,
+    adresse_ip: document.getElementById('f_ip').value.trim(),
+    adresse_mac: document.getElementById('f_mac').value.trim(),
+    os: document.getElementById('f_os').value.trim(),
+    note: document.getElementById('f_note').value.trim()
   };
   const msg = document.getElementById('createMsg');
   if(!payload.reference){
@@ -193,16 +230,22 @@ async function createEquip(){
     msg.textContent = 'La référence est obligatoire.';
     return;
   }
-  const { data, error } = await sb.from('equipements').insert(payload).select().single();
-  if(error){
-    msg.style.color = 'var(--status-panne)';
-    msg.textContent = "Erreur : " + error.message;
-    return;
+
+  if(formMode === 'edit'){
+    const { error } = await sb.from('equipements').update(payload).eq('id', currentEquip.id);
+    if(error){ msg.style.color='var(--status-panne)'; msg.textContent = "Erreur : " + error.message; return; }
+    msg.style.color = 'var(--status-service)';
+    msg.textContent = 'Modifications enregistrées.';
+    await loadAll();
+    openDetail(currentEquip.id);
+  } else {
+    const { data, error } = await sb.from('equipements').insert(payload).select().single();
+    if(error){ msg.style.color='var(--status-panne)'; msg.textContent = "Erreur : " + error.message; return; }
+    msg.style.color = 'var(--status-service)';
+    msg.textContent = 'Équipement créé.';
+    await loadAll();
+    openDetail(data.id);
   }
-  msg.style.color = 'var(--status-service)';
-  msg.textContent = 'Équipement créé.';
-  await loadAll();
-  openDetail(data.id);
 }
 
 // ---------- Fiche matériel ----------
@@ -223,6 +266,10 @@ function openDetail(id){
     <div class="info-item"><div class="k">Garantie jusqu'au</div><div class="v">${currentEquip.garantie_fin||'—'}</div></div>
     <div class="info-item"><div class="k">Utilisateur</div><div class="v">${currentEquip.personnes?.nom||'—'}</div></div>
     <div class="info-item"><div class="k">Lieu</div><div class="v">${currentEquip.lieux?.nom||'—'}</div></div>
+    <div class="info-item"><div class="k">Adresse IP</div><div class="v">${currentEquip.adresse_ip||'—'}</div></div>
+    <div class="info-item"><div class="k">Adresse MAC</div><div class="v">${currentEquip.adresse_mac||'—'}</div></div>
+    <div class="info-item"><div class="k">Système (OS)</div><div class="v">${currentEquip.os||'—'}</div></div>
+    <div class="info-item" style="grid-column:1 / -1;"><div class="k">Note</div><div class="v">${currentEquip.note||'—'}</div></div>
   `;
   QRCode.toCanvas(document.getElementById('qrCanvas'), currentEquip.reference, { width:72, margin:1 });
   go('fiche');
